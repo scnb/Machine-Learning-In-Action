@@ -97,6 +97,8 @@ def smoSimple(dataMatIn, classLabels, C, toler, maxIter): # 五个参数分别�
         print ("iteration number: %d" % iter)
     return b, alphas
 
+
+
 # 完整版Platt SMO的支持函数
 '''
 下面的一个对象和三个函数是作为辅助用到，当和优化过程及外循环组合在一起时，组成强大的SMO算法
@@ -231,6 +233,9 @@ def innerL(i, oS):
         return 0
 
 # 完整版Platt SMO外循环代码
+'''
+    相对于简化版SMO函数来说，完整版算法不仅大大的提高了优化的速度，还使其存在进一步提高运行速度的空间
+'''
 
 def smoP(dataMatIn, classLabels, C, toler, maxIter, kTup=('lin', 0)):
     """
@@ -323,6 +328,11 @@ def kernelTrans(X, A, kTup): # kTup是一个元组，包含了核函数的信息
     return K
 
 # 使用径向基函数（Radial Basis Function）RBF
+'''
+    核函数会将数据从一个低维空间映射到高维空间
+    将一个低维空间中的非线性问题转换为高维空间中的线性问题来求解
+    径向基函数是一个常用的度量两个向量间距离的函数
+'''
 
 def testRbf(k1 = 1.3):
     dataArr, labelArr = loadDataSet('testSetRBF.txt')
@@ -352,3 +362,64 @@ def testRbf(k1 = 1.3):
         if sign(predict) != sign(labelArr[i]):
             errorCount += 1
     print ("The training error rate is: %f" % (float(errorCount/m)))
+
+# 将图片转成向量的函数
+
+def img2vector(filename):
+    returnVect = zeros((1, 1024))
+    fr = open(filename)
+    for i in range(32):
+        lineStr = fr.readline()
+        for j in range(32):
+            returnVect[0, 32 * i + j] = int(lineStr[j])
+    return returnVect
+
+# 基于SVM的手写数字识别
+
+def loadImages(dirName):
+    from os import listdir
+    hwLabels = []
+    trainingFileList = listdir(dirName)
+    m = len(trainingFileList)
+    trainingMat = zeros((m,1024))
+    for i in range(m):
+        fileNameStr = trainingFileList[i]
+        fileStr = fileNameStr.split('.')[0]
+        classNumStr = int(fileStr.split('_')[0])
+        if classNumStr == 9:
+            hwLabels.append(-1)
+        else:
+            hwLabels.append(1)
+        trainingMat[i,:] = img2vector('%s/%s' % (dirName, fileNameStr))
+    return trainingMat, hwLabels
+
+def testDigits(kTup = ('rbf', 10)):
+    dataArr, labelArr = loadImages('trainingDigits')               # 导入训练集
+    b, alphas = smoP(dataArr, labelArr, 200, 0.0001, 10000, kTup)
+    dataMat = mat(dataArr)
+    labelMat = mat(labelArr).transpose()
+    svInd = nonzero(alphas.A > 0)[0]
+    sVs = dataMat[svInd]
+    labelSV = labelMat[svInd]
+    print ("There are %d Support Vectors" % (shape(sVs)[0]))
+    m, n = shape(dataMat)
+    errorCount = 0
+    for i in range(m):
+        kernelEval = kernelTrans(sVs, dataMat[i,:], kTup)
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        if sign(predict) != sign(labelArr[i]):
+            errorCount += 1
+    print ("The training error rate is %f" % (float(errorCount/m)))
+    dataArr, labelArr = loadImages('testDigits')                    # 导入测试集
+    errorCount = 0
+    dataMat = mat(dataArr)
+    labelMat = mat(labelArr).transpose()
+    m, n = shape(dataMat)
+    for i in range(m):
+        kernelEval = kernelTrans(sVs, dataMat[i,:], kTup)
+        predict = kernelEval.T * multiply(labelSV, alphas[svInd]) + b
+        if sign(predict) != sign(labelArr[i]):
+            errorCount += 1
+    print ("The test error rate is %f" % (float(errorCount/m)))
+    
+
