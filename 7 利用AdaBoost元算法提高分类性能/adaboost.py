@@ -110,7 +110,7 @@ def adaBoostTrainDS(dataArr, classLabels, numIt = 9):      # DS表示Decision St
         print ("total error: ", errorRate, "\n")
         if errorRate == 0.0:                # 如果训练错误率为0，则退出循环
             break
-    return weakClassArr
+    return weakClassArr, aggClassESt
 
 
 # 实现测试算法：基于AdaBoost的分类
@@ -127,5 +127,36 @@ def adaClassify(dataToClass, classifierArr):        # dataToClass即需要分类
 
 
 
+# ROC曲线的绘制即AUC计算函数（ROC:接收者操作特征（Receiver Operating Charactersitic），AUC：曲线下的面积）
+
+def plotROC(predStrengths, classLabels):
+    import matplotlib.pyplot as plt
+    cur = (1.0, 1.0)    # 画笔的当前位置，在右上角
+    ySum = 0.0
+    numPosClas = sum(array(classLabels) == 1.0)         # 通过数组过滤方法来获得正例样本的数量
+    yStep = 1 / float(numPosClas)                       # 计算y轴上的步进长度，因为y轴是真正例
+    xStep = 1 / float(len(classLabels) - numPosClas)    # 同上，计算x轴上的步进长度，因为x是假正例
+    sortedIndicies = predStrengths.argsort()
+    # 以下三行代码用来构建画笔
+    fig = plt.figure()
+    fig.clf()
+    ax = plt.subplot(111)
+    for index in sortedIndicies.tolist()[0]:
+        if classLabels[index] == 1.0:            # 如果该样本的实际是正例
+            delX = 0
+            delY = yStep                         # 则在y轴上下降一个步长（因为起点在右上角）
+        else:
+            delX = xStep                         # 则在x轴上下降一个步长（因为起点在右上角）
+            delY = 0
+            ySum += cur[1]                        # 为了计算AUC，因为所有的小矩形的宽度都是xStep，所以只需把所有矩形的高度加起来
+        ax.plot([cur[0], cur[0] - delX], [cur[1], cur[1] - delY], c='b')    # 画实线
+        cur = (cur[0]-delX, cur[1]-delY)
+    ax.plot([0, 1], [0, 1], 'b--')                # 画虚线
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC curve for AdaBoost Horse Colic Detection System')
+    ax.axis([0, 1, 0, 1])
+    plt.show()
+    print ("the Area Under The Curve is: ", ySum * xStep)
 
 
