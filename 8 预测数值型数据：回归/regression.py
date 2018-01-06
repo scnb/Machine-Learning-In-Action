@@ -1,6 +1,9 @@
 #-*- coding:utf-8 -*-
 
 from numpy import *
+from time import sleep
+import json
+import urllib.request
 
 
 def loadDataSet(fileName):
@@ -155,3 +158,84 @@ def stageWise(xArr, yArr, eps = 0.01, numIt = 100):
         ws = wsMax.copy()
         returnMat[i, :] = ws.T
     return returnMat
+
+
+# 使用Google购物的API收集数据
+
+
+def searchForSet(retX, retY, setNum, yr, numPce, origPrc):
+    sleep(10)
+    myAPIstr = ('get from code.google.com')
+    searchURL = ('https://www.googleapis.com/shopping/search/v1/public/products? key = %s&country=US&q=lego+%d&alt=json' % (myAPIstr, setNum))
+    pg = urllib.request.urlopen(searchURL)
+    retDict = json.loads(pg.read())         # 获取产品信息组成的字典
+    for i in range(len(retDict['items'])):
+        try:
+            currItem = retDict['items'][i]
+            if currItem['product']['condition'] == 'new':   # 判断该产品是否是新的
+                newFlag = 1
+            else:
+                newFlag = 0
+            listOfInv = currItem['product']['inventories']  # 抽取货物清单
+            for item in listOfInv:
+                sellingPrice = item['prices']
+                if sellingPrice > origPrc * 0.5:            # 判断该乐高套装是否完整（通过简单的判断当前售价是否大于原始售价的一半）
+                    print ("%d\t%d\t%d\t%f\t%f" %(yr, numPce, newFlag, origPrc, sellingPrice))
+                retX.append([yr, numPce, newFlag, origPrc])     # 将信息分别保存在list对象retX和retY中
+                retY.append(sellingPrice)
+        except: print ('problem with item %d' % i)
+
+
+def setDataCollect(retX, retY):
+    searchForSet(retX, retY, 8288, 2006, 800, 49.99)
+    searchForSet(retX, retY, 10030, 2002, 3096, 269.99)
+    searchForSet(retX, retY, 10179, 2007, 5195, 499.99)
+    searchForSet(retX, retY, 10181, 2007, 3428, 199.99)
+    searchForSet(retX, retY, 10189, 2008, 5922, 299.99)
+    searchForSet(retX, retY, 10196, 2009, 3263, 249.99)
+
+
+# 交叉验证测试岭回归
+
+def crossValidation(xArr, yArr, numVal = 10):
+    '''
+    :param xArr:输入数据
+    :param yArr:输入数据
+    :param numVal:交叉验证次数
+    :return:无
+    '''
+    m = len(yArr)
+    indexList = range(m)
+    errorMat = zeros((numVal, 30))
+    for i in range(numVal):
+        trainX = []         # 创建训练集
+        trainY = []
+        testX = []          # 创建测试集
+        testY = []
+        random.shuffle(indexList)       # 将全体数据随机打乱，以便于后面随机抽取
+        for j in range(m):
+            if j < m * 0.9:             # 90%的数据用于训练
+                trainX.append(xArr[indexList[j]])
+                trainY.append(yArr[indexList[j]])
+            else:                       # 10%的数据用于测试
+                testX.append(xArr[indexList[j]])
+                testY.append(yArr[indexList[j]])
+    wMat = ridgeTest(trainX, trainY)    # 使用岭回归算法求回归系数
+    for k in range(30):                 # 在测试集上用30组回归系数来循环测试回归效果
+        matTestX = mat(testX)           # 下面五行先用训练时的参数将测试数据标准化
+        matTrainX = mat(trainX)
+        meanTrain = mean(matTrainX, 0)
+        varTrain = var(matTrainX, 0)
+        matTestX = (matTestX - meanTrain) / varTrain
+        yEst = matTestX * mat(wMat[k, :]).T + mean(trainY)
+        errorMat[i, k] = rssError(yEst.T.A, array(testY))   # 用rssError函数来计算预测值和实际值的误差
+    meanErrors = mean(errorMat, 0)
+    minMean = float(min(meanErrors))
+    bestWeights = wMat[nonzero(meanErrors == minMean)]
+    xMat = mat(xArr)
+    yMat = mat(yArr).T
+    meanX = mean(xMat, 0)
+    varX = var(xMat, 0)
+    unReg = bestWeights / varX
+    print ("the best model from Ridge Regression is:\n", unReg)
+    print ("with constant term: ", -1 * sum(multiply(meanX, unReg)) + mean(yMat))
